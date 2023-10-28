@@ -12,17 +12,19 @@ namespace Magic_VillaAPI.Controllers
     public class MagicVillaController : ControllerBase
     {
         private readonly ILogger<MagicVillaController> _logger;
+        private readonly AppliactionDbContext _db;
 
-        public MagicVillaController (ILogger<MagicVillaController> logger)
+        public MagicVillaController (ILogger<MagicVillaController> logger, AppliactionDbContext db)
         {
             _logger = logger;
+            _db = db;
         }
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
         public ActionResult<VillaDTO> GetVillas()
         {
             _logger.LogInformation("Geting all villas");
-            return Ok(VillaStore.villaList);
+            return Ok(_db.Villas.ToList());
         }
         [HttpGet("{id}", Name = "GetVilla")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -30,7 +32,7 @@ namespace Magic_VillaAPI.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<VillaDTO> GetVilla(int id)
         {
-            var villa = VillaStore.villaList.FirstOrDefault(x => x.Id == id);
+            var villa = _db.Villas.FirstOrDefault(x => x.Id == id);
             if (id <= 0 || villa is null)
             {
                 _logger.LogError("Request Validation Error In GetVilla Controller");
@@ -50,7 +52,7 @@ namespace Magic_VillaAPI.Controllers
 
         public ActionResult<VillaDTO> AddVilla(VillaDTO villa)
         {
-            if (VillaStore.villaList.FirstOrDefault(x => x.Name.ToLower() == villa.Name.ToLower()) != null) {
+            if (_db.Villas.FirstOrDefault(x => x.Name.ToLower() == villa.Name.ToLower()) != null) {
                 //ModelState.AddModelError("", $"{villa.Name} already exists");
                 _logger.LogError($"{villa.Name} already exists, Controller: AddVilla");
                 return BadRequest(ModelState);
@@ -60,11 +62,24 @@ namespace Magic_VillaAPI.Controllers
                 _logger.LogError("Request Validation Error In Addvilla");
                 return BadRequest();
             }
+            Villa model = new()
+            {
+                //Id = villa.Id,
+                Name = villa.Name,
+                Details = villa.Details,
+                Amenity = villa.Amenity,
+                ImageUrl = villa.ImageUrl,
+                Occupance = villa.Occupancy,
+                Rate = villa.Rate,
+                Sqft = villa.Sqft,
 
-            villa.Id = VillaStore.villaList.OrderByDescending(x => x.Id).FirstOrDefault().Id + 1;
-            VillaStore.villaList.Add(villa);
+            };
+
             _logger.LogInformation("Creating a new villa info");
-            return CreatedAtRoute("GetVilla", new { id = villa.Id }, villa);
+
+            _db.Villas.Add(model);
+            _db.SaveChanges();
+            return Ok(model);
         }
 
         [HttpDelete("{id:int}", Name = "DeleteVilla")]
@@ -72,35 +87,41 @@ namespace Magic_VillaAPI.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public ActionResult<VillaDTO> DeleteVilla(int id)
         {
-            var villa = VillaStore.villaList.FirstOrDefault(x => x.Id == id);
+            var villa = _db.Villas.FirstOrDefault(x => x.Id == id);
 
             if (villa is null || id <= 0)
             {
                 _logger.LogError("Request Validation Error");
                 return NotFound();
             }
-            VillaStore.villaList.Remove(villa);
+
+            _db.Villas.Remove(villa);
+            _db.SaveChanges();
             _logger.LogInformation("Deleting a villa");
             return Ok("Item was deleted");
         }
+        [HttpPut("{id:int}", Name = "UpdateVillaAll")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [HttpPut("{id:int}", Name = "UpdateVillaAll")]
+        
         public IActionResult UpdateVillaAll(int id, VillaDTO villaDTO)
         {
-            if (villaDTO == null || villaDTO.Id != id)
+            if (villaDTO == null)
             {
                 _logger.LogError("Request Validation Error In UpdateVillaAll Controller");
                 return BadRequest();
             }
 
-            var villa = VillaStore.villaList.FirstOrDefault(x => x.Id == id);
-            villa.Id = villaDTO.Id;
-            villa.Name = villaDTO.Name;
-            villa.Occupancy = villaDTO.Occupancy;
-            villa.Sqft = villaDTO.Sqft;
-            _logger.LogInformation("Updating villa's all fields");
+            var villa = _db.Villas.FirstOrDefault(x => x.Id == id);
 
+            if (villa == null)
+            {
+                _logger.LogError("Villa is null");
+                return BadRequest();
+            }
+            _db.Villas.Update(villa);
+            _db.SaveChanges();
+            _logger.LogInformation("Updating villa's all fields");
             return Ok(villa);
 
 
@@ -115,14 +136,43 @@ namespace Magic_VillaAPI.Controllers
                 _logger.LogError("Request Validation Error In UpdateVillaPartial Controller");
                 return BadRequest();
             }
-            var findVilla = VillaStore.villaList.FirstOrDefault(x => x.Id == id);
+            var findVilla = _db.Villas.FirstOrDefault(x => x.Id == id);
 
             if (findVilla is null)
             {
                 _logger.LogError("Request Validation Error In UpdateVillaPartial Controller");
                 return NotFound();
             }
-            villa.ApplyTo(findVilla, ModelState);
+            VillaDTO villaDTO = new()
+            {
+                Id = findVilla.Id,
+                Name = findVilla.Name,
+                Details = findVilla.Details,
+                Amenity = findVilla.Amenity,
+                ImageUrl = findVilla.ImageUrl,
+                Occupancy = findVilla.Occupance,
+                Rate = findVilla.Rate,
+                Sqft = findVilla.Sqft,
+
+            };
+
+            villa.ApplyTo(villaDTO, ModelState);
+
+            Villa model = new()
+            {
+                Id = villaDTO.Id,
+                Name = villaDTO.Name,
+                Details = villaDTO.Details,
+                Amenity = villaDTO.Amenity,
+                ImageUrl = villaDTO.ImageUrl,
+                Occupance = villaDTO.Occupancy,
+                Rate = villaDTO.Rate,
+                Sqft = villaDTO.Sqft,
+
+            };
+
+            _db.Villas.Update(model);   
+            _db.SaveChanges();
             _logger.LogInformation("Updating Partial Villa's Fields");
             return NoContent();
 
